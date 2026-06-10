@@ -1,3 +1,4 @@
+"""
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -44,3 +45,10 @@ def upload(file: UploadFile = File(...)):
     rag.vectorstore.build_from_documents(docs)
     
     return {"message": f"{file.filename} uploaded and indexed"}
+"""
+# main.py
+rag = None
+
+@app.get("/")
+def root():
+    return {"status": "ok"}

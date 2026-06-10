@@ -1,4 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import shutil
 import os
@@ -7,13 +9,15 @@ from src.search import RAGSearch
 app = FastAPI()
 rag = RAGSearch()
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 3
 
 @app.get("/")
 def root():
-    return {"status": "RAG API is running"}
+    return FileResponse("static/index.html")
 
 @app.post("/query")
 def query(request: QueryRequest):

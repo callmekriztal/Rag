@@ -1,6 +1,6 @@
 from typing import List
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -8,11 +8,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 class EmbeddingPipeline:
     def __init__(
         self,
-        model_name: str = "all-MiniLM-L6-v2",
+        model_name: str = "models/embedding-001",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
     ):
-        self.model = SentenceTransformer(model_name)
+        self.model = GoogleGenerativeAIEmbeddings(model=model_name)
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -25,5 +25,5 @@ class EmbeddingPipeline:
 
     def embed_chunks(self, chunks: List[Document]) -> np.ndarray:
         texts = [chunk.page_content for chunk in chunks]
-        embeddings = self.model.encode(texts, show_progress_bar=True)
+        embeddings = self.model.embed_documents(texts)
         return np.array(embeddings).astype(np.float32)

@@ -2,7 +2,7 @@
 langchain
 langchain-core
 langchain-text-splitters
-langchain-google-genai
+langchain-google-genai==1.0.10
 langchain-text-splitters
 
 ## models and db

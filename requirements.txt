@@ -1,0 +1,24 @@
+## langchain
+langchain
+langchain-core
+langchain-text-splitters
+langchain-google-genai
+langchain-text-splitters
+
+## models and db
+sentence-transformers
+faiss-cpu
+
+## data
+pypdf
+pandas
+openpyxl
+docx2txt
+numpy
+
+python-dotenv
+
+## web
+uvicorn
+fastapi 
+python-multipart

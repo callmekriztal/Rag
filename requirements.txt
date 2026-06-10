@@ -19,6 +19,6 @@ numpy
 python-dotenv
 
 ## web
-uvicorn
-fastapi 
+fastapi
+uvicorn[standard]
 python-multipart

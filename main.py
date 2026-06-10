@@ -1,4 +1,3 @@
-"""
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -8,7 +7,7 @@ import os
 from src.search import RAGSearch
 
 app = FastAPI()
-rag = None
+rag = RAGSearch()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -18,7 +17,7 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"status": "ok"}
+    return FileResponse("static/index.html")
 
 @app.post("/query")
 def query(request: QueryRequest):
@@ -45,10 +44,3 @@ def upload(file: UploadFile = File(...)):
     rag.vectorstore.build_from_documents(docs)
     
     return {"message": f"{file.filename} uploaded and indexed"}
-"""
-# main.py
-rag = None
-
-@app.get("/")
-def root():
-    return {"status": "ok"}

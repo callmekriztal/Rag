@@ -14,7 +14,7 @@ class FaissVectorStore:
     def __init__(
         self,
         persist_dir: str = "faiss_store",
-        embedding_model: str = "models/embedding-001",
+        embedding_model: str = "text-embedding-004",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
     ):

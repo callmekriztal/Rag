@@ -8,7 +8,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 class EmbeddingPipeline:
     def __init__(
         self,
-        model_name: str = "text-embedding-004",
+        model_name: str = "models/embedding-001",
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
     ):

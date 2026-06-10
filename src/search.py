@@ -12,7 +12,7 @@ class RAGSearch:
     def __init__(
         self,
         persist_dir: str = "faiss_store",
-        embedding_model: str = "text-embedding-004",
+        embedding_model: str = "models/embedding-001",
         llm_model: str = "gemini-2.5-flash",
     ):
         self.vectorstore = FaissVectorStore(

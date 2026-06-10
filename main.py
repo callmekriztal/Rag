@@ -7,7 +7,7 @@ import os
 from src.search import RAGSearch
 
 app = FastAPI()
-rag = RAGSearch()
+rag = None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -17,7 +17,7 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return FileResponse("static/index.html")
+    return {"status": "ok"}
 
 @app.post("/query")
 def query(request: QueryRequest):

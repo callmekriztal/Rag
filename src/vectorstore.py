@@ -27,6 +27,7 @@ class FaissVectorStore:
         self.embedding_model = embedding_model
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.embed_model = GoogleGenerativeAIEmbeddings(model=embedding_model)
 
         print(f"[INFO] Vector store initialized with model: {embedding_model}")
 
@@ -43,7 +44,7 @@ class FaissVectorStore:
         embeddings = emb_pipe.embed_chunks(chunks)
 
         metadatas = [
-            {"text": chunk.page_content, **chunk.metadata}
+            {"text": chunk.page_content, **chunk.metadata} ## ** dictionary unpacking
             for chunk in chunks
         ]
 
@@ -110,9 +111,7 @@ class FaissVectorStore:
         return results
 
     def query(self, query_text: str, top_k: int = 5):
+        
         print(f"[INFO] Querying vector store for: '{query_text}'")
-
-        model = GoogleGenerativeAIEmbeddings(model=self.embedding_model)
-        query_emb = np.array(model.embed_query(query_text)).astype(np.float32).reshape(1, -1)
-
+        query_emb = np.array(self.embed_model.embed_query(query_text))
         return self.search(query_emb, top_k=top_k)

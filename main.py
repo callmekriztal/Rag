@@ -34,20 +34,26 @@ def query(request: QueryRequest):
     )
     return {"question": request.question, "answer": answer}
 
-@app.post("/upload")
-def upload(file: UploadFile = File(...)):
-    allowed = [".pdf", ".txt", ".docx", ".csv", ".json"]
-    ext = os.path.splitext(file.filename)[1].lower()
-
-    if ext not in allowed:
-        raise HTTPException(status_code=400, detail=f"File type {ext} not supported")
-
-    save_path = os.path.join("data", file.filename)
-    with open(save_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    from src.dataloader import load_all_documents
-    docs = load_all_documents("data")
-    rag.vectorstore.build_from_documents(docs)
-
-    return {"message": f"{file.filename} uploaded and indexed"}
+@app.post("/upload")                                                      
+def upload(file: UploadFile = File(...)):                                 
+    allowed = [".pdf", ".txt", ".docx", ".csv", ".json"]                  
+    ext = os.path.splitext(file.filename)[1].lower()                      
+    if ext not in allowed:                                                
+        raise HTTPException(status_code=400, detail=f"File type {ext} not supported")                                                                 
+                                                                              
+    save_path = os.path.join("data", file.filename)                       
+    with open(save_path, "wb") as f:                                      
+        shutil.copyfileobj(file.file, f)                                  
+                                                                                                               
+    from src.dataloader import load_pdf, load_txt, load_docx, load_csv,load_json                                                                   
+    from pathlib import Path                                              
+                                                                              
+    loaders = {                                                           
+            ".pdf": load_pdf, ".txt": load_txt,                               
+            ".docx": load_docx, ".csv": load_csv, ".json": load_json          
+        }                                                                     
+                                                                              
+    docs = loaders[ext](Path(save_path))                                  
+    rag.vectorstore.add_documents(docs)  # incremental add, not rebuild   
+                                                                              
+    return {"message": f"{file.filename} uploaded and indexed"}    

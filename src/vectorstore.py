@@ -111,7 +111,28 @@ class FaissVectorStore:
         return results
 
     def query(self, query_text: str, top_k: int = 5):
-        
+
         print(f"[INFO] Querying vector store for: '{query_text}'")
-        query_emb = np.array(self.embed_model.embed_query(query_text))
+        query_emb = np.array(
+            self.embed_model.embed_query(query_text),
+            dtype = np.float32
+            ).reshape(1,-1)
         return self.search(query_emb, top_k=top_k)
+
+    def add_documents(self, documents: List[Document]):                       
+                     
+        emb_pipe = EmbeddingPipeline(                                         
+            model_name=self.embedding_model,                                  
+            chunk_size=self.chunk_size,                                       
+            chunk_overlap=self.chunk_overlap,                                 
+        )                                                                     
+        chunks = emb_pipe.chunk_documents(documents)                          
+        embeddings = emb_pipe.embed_chunks(chunks)                            
+        metadatas = [                                                         
+            {"text": chunk.page_content, **chunk.metadata}                    
+            for chunk in chunks                                               
+        ]                                                                     
+        self.add_embeddings(embeddings, metadatas)                            
+        self.save()  # persist the updated index                              
+        
+        print(f"[INFO] Incrementally added {len(chunks)} chunks.")       

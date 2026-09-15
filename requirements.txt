@@ -1,23 +1,17 @@
-## langchain
 langchain
 langchain-core
 langchain-text-splitters
-langchain-google-genai==1.0.10
-langchain-text-splitters
-
-## models and db
+langchain-google-genai>=4.2.4
 faiss-cpu
-
-## data
 pypdf
 pandas
 openpyxl
 docx2txt
 numpy
-
 python-dotenv
-
-## web
+pydantic-settings
 fastapi
 uvicorn[standard]
 python-multipart
+httpx
+pytest

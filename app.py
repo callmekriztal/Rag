@@ -6,13 +6,16 @@ def main():
 
     query = "What is attention mechanism?"
 
-    answer = rag.search_and_answer(
+    result = rag.search_and_answer(
         query=query,
         top_k=3,
     )
 
     print("\nAnswer:")
-    print(answer)
+    print(result["answer"])
+    print("\nSources:")
+    for src in result.get("sources", []):
+        print(f" - {src['label']}")
 
 
 if __name__ == "__main__":

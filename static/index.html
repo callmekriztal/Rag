@@ -65,7 +65,7 @@ body{
 }
 
 .message{
-  max-width:75%;
+  max-width:80%;
   padding:12px 16px;
   border-radius:18px;
   line-height:1.7;
@@ -86,6 +86,31 @@ body{
   color:#EAEAEA;
   border:1px solid #2A2A2A;
   border-bottom-left-radius:6px;
+}
+
+.sources-container{
+  margin-top:10px;
+  padding-top:8px;
+  border-top:1px solid #333333;
+  font-size:12px;
+  color:#9CA3AF;
+}
+
+.sources-title{
+  font-weight:600;
+  margin-bottom:4px;
+  color:#D1D5DB;
+}
+
+.source-badge{
+  display:inline-block;
+  background:#262626;
+  color:#60A5FA;
+  padding:2px 8px;
+  border-radius:6px;
+  margin-right:6px;
+  margin-top:4px;
+  border:1px solid #374151;
 }
 
 .typing{
@@ -188,7 +213,7 @@ body{
   </div>
 
   <div id="upload-area">
-    <input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.json">
+    <input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.json,.xlsx">
     <label for="file-input" id="upload-label">
       Upload document
     </label>
@@ -216,10 +241,33 @@ const sendBtn = document.getElementById("send");
 const fileInput = document.getElementById("file-input");
 const uploadStatus = document.getElementById("upload-status");
 
-function addMessage(text, role){
+function addMessage(text, role, sources = []){
   const div = document.createElement("div");
   div.className = `message ${role}`;
-  div.textContent = text;
+  
+  const textNode = document.createElement("div");
+  textNode.textContent = text;
+  div.appendChild(textNode);
+
+  if(sources && sources.length > 0){
+    const srcContainer = document.createElement("div");
+    srcContainer.className = "sources-container";
+    
+    const srcTitle = document.createElement("div");
+    srcTitle.className = "sources-title";
+    srcTitle.textContent = "Sources:";
+    srcContainer.appendChild(srcTitle);
+
+    sources.forEach(src => {
+      const badge = document.createElement("span");
+      badge.className = "source-badge";
+      badge.textContent = src.label || src.file;
+      srcContainer.appendChild(badge);
+    });
+
+    div.appendChild(srcContainer);
+  }
+
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return div;
@@ -264,7 +312,8 @@ async function sendMessage(){
 
     addMessage(
       data.answer || "No response received.",
-      "bot"
+      "bot",
+      data.sources || []
     );
 
   }catch(err){

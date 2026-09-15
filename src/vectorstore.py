@@ -1,72 +1,122 @@
+import logging
 import os
 import pickle
-from typing import List
+import threading
+from typing import Any, Dict, List, Optional
 
 import faiss
 import numpy as np
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from src.config import get_settings
 from src.embedding import EmbeddingPipeline
+
+logger = logging.getLogger("new_rag.vectorstore")
 
 
 class FaissVectorStore:
     def __init__(
         self,
-        persist_dir: str = "faiss_store",
-        embedding_model: str = "models/gemini-embedding-001",
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
+        persist_dir: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = None,
     ):
-        self.persist_dir = persist_dir
+        settings = get_settings()
+        self.persist_dir = persist_dir or settings.PERSIST_DIR
+        self.embedding_model = embedding_model or settings.EMBEDDING_MODEL
+        self.chunk_size = chunk_size or settings.CHUNK_SIZE
+        self.chunk_overlap = chunk_overlap or settings.CHUNK_OVERLAP
+
         os.makedirs(self.persist_dir, exist_ok=True)
 
-        self.index = None
-        self.metadata = []
+        self.index: Optional[faiss.Index] = None
+        self.metadata: List[Dict[str, Any]] = []
+        self._lock = threading.Lock()
 
-        self.embedding_model = embedding_model
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
-        self.embed_model = GoogleGenerativeAIEmbeddings(model=embedding_model)
-
-        print(f"[INFO] Vector store initialized with model: {embedding_model}")
-
-    def build_from_documents(self, documents: List[Document]):
-        print(f"[INFO] Building vector store from {len(documents)} documents...")
-
-        emb_pipe = EmbeddingPipeline(
+        self.emb_pipe = EmbeddingPipeline(
             model_name=self.embedding_model,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
         )
 
-        chunks = emb_pipe.chunk_documents(documents)
-        embeddings = emb_pipe.embed_chunks(chunks)
+        logger.info(f"FaissVectorStore initialized with model: {self.embedding_model}")
+
+    def build_from_documents(self, documents: List[Document]):
+        if not documents:
+            logger.warning("No documents provided to build vector store.")
+            return
+
+        logger.info(f"Building vector store from {len(documents)} documents...")
+        chunks = self.emb_pipe.chunk_documents(documents)
+        if not chunks:
+            logger.warning("No chunks produced from documents.")
+            return
+
+        embeddings = self.emb_pipe.embed_chunks(chunks)
 
         metadatas = [
-            {"text": chunk.page_content, **chunk.metadata} ## ** dictionary unpacking
+            {"text": chunk.page_content, **chunk.metadata}
             for chunk in chunks
         ]
 
-        self.add_embeddings(embeddings, metadatas)
-        self.save()
+        with self._lock:
+            self.index = None
+            self.metadata = []
+            self._add_embeddings_unlocked(embeddings, metadatas)
+            self._save_unlocked()
 
-        print(f"[INFO] Vector store built and saved to {self.persist_dir}")
+        logger.info(f"Vector store built and saved to {self.persist_dir}")
 
-    def add_embeddings(self, embeddings: np.ndarray, metadatas: List[dict] = None):
+    def add_documents(self, documents: List[Document]):
+        if not documents:
+            return
+
+        chunks = self.emb_pipe.chunk_documents(documents)
+        if not chunks:
+            return
+
+        embeddings = self.emb_pipe.embed_chunks(chunks)
+        metadatas = [
+            {"text": chunk.page_content, **chunk.metadata}
+            for chunk in chunks
+        ]
+
+        with self._lock:
+            self._add_embeddings_unlocked(embeddings, metadatas)
+            self._save_unlocked()
+
+        logger.info(f"Incrementally added {len(chunks)} chunks to vector store.")
+
+    def add_embeddings(self, embeddings: np.ndarray, metadatas: Optional[List[dict]] = None):
+        with self._lock:
+            self._add_embeddings_unlocked(embeddings, metadatas)
+
+    def _add_embeddings_unlocked(self, embeddings: np.ndarray, metadatas: Optional[List[dict]] = None):
+        if embeddings.shape[0] == 0:
+            return
+
         dim = embeddings.shape[1]
-
         if self.index is None:
-            self.index = faiss.IndexFlatL2(dim)
+            # Use IndexFlatIP for Cosine Similarity (with normalized vectors)
+            self.index = faiss.IndexFlatIP(dim)
 
         self.index.add(embeddings)
 
         if metadatas:
             self.metadata.extend(metadatas)
 
-        print(f"[INFO] Added {embeddings.shape[0]} vectors to Faiss index.")
+        logger.info(f"Added {embeddings.shape[0]} vectors to FAISS index.")
 
     def save(self):
+        with self._lock:
+            self._save_unlocked()
+
+    def _save_unlocked(self):
+        if self.index is None:
+            logger.warning("Cannot save empty FAISS index.")
+            return
+
         faiss_path = os.path.join(self.persist_dir, "faiss.index")
         meta_path = os.path.join(self.persist_dir, "metadata.pkl")
 
@@ -75,64 +125,48 @@ class FaissVectorStore:
         with open(meta_path, "wb") as f:
             pickle.dump(self.metadata, f)
 
-        print(f"[INFO] Saved Faiss index and metadata to {self.persist_dir}")
+        logger.info(f"Saved FAISS index and metadata to {self.persist_dir}")
 
     def load(self):
-        faiss_path = os.path.join(self.persist_dir, "faiss.index")
-        meta_path = os.path.join(self.persist_dir, "metadata.pkl")
+        with self._lock:
+            faiss_path = os.path.join(self.persist_dir, "faiss.index")
+            meta_path = os.path.join(self.persist_dir, "metadata.pkl")
 
-        if not os.path.exists(faiss_path):
-            print("[WARNING] FAISS index not found.")
-            return
+            if not os.path.exists(faiss_path) or not os.path.exists(meta_path):
+                logger.warning(f"Index or metadata file missing in {self.persist_dir}")
+                return False
 
-        if not os.path.exists(meta_path):
-            print("[WARNING] Metadata file not found.")
-            return
+            self.index = faiss.read_index(faiss_path)
 
-        self.index = faiss.read_index(faiss_path)
+            with open(meta_path, "rb") as f:
+                self.metadata = pickle.load(f)
 
-        with open(meta_path, "rb") as f:
-            self.metadata = pickle.load(f)
+            logger.info(f"Loaded FAISS index ({self.index.ntotal} vectors) and metadata from {self.persist_dir}")
+            return True
 
-        print(f"[INFO] Loaded Faiss index and metadata from {self.persist_dir}")
+    def search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict[str, Any]]:
+        with self._lock:
+            if self.index is None or self.index.ntotal == 0:
+                logger.warning("Search called on empty vector store index.")
+                return []
 
-    def search(self, query_embedding: np.ndarray, top_k: int = 5):
-        D, I = self.index.search(query_embedding, top_k)
+            k = min(top_k, self.index.ntotal)
+            scores, indices = self.index.search(query_embedding, k)
 
-        results = []
-        for idx, dist in zip(I[0], D[0]):
-            meta = self.metadata[idx] if idx < len(self.metadata) else None
-            results.append({
-                "index": int(idx),
-                "distance": float(dist),
-                "metadata": meta,
-            })
+            results = []
+            for idx, score in zip(indices[0], scores[0]):
+                if idx < 0 or idx >= len(self.metadata):
+                    continue
+                meta = self.metadata[idx]
+                results.append({
+                    "index": int(idx),
+                    "score": float(score),
+                    "metadata": meta,
+                })
 
-        return results
+            return results
 
-    def query(self, query_text: str, top_k: int = 5):
-
-        print(f"[INFO] Querying vector store for: '{query_text}'")
-        query_emb = np.array(
-            self.embed_model.embed_query(query_text),
-            dtype = np.float32
-            ).reshape(1,-1)
+    def query(self, query_text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        logger.info(f"Querying vector store for: '{query_text}'")
+        query_emb = self.emb_pipe.embed_query(query_text)
         return self.search(query_emb, top_k=top_k)
-
-    def add_documents(self, documents: List[Document]):                       
-                     
-        emb_pipe = EmbeddingPipeline(                                         
-            model_name=self.embedding_model,                                  
-            chunk_size=self.chunk_size,                                       
-            chunk_overlap=self.chunk_overlap,                                 
-        )                                                                     
-        chunks = emb_pipe.chunk_documents(documents)                          
-        embeddings = emb_pipe.embed_chunks(chunks)                            
-        metadatas = [                                                         
-            {"text": chunk.page_content, **chunk.metadata}                    
-            for chunk in chunks                                               
-        ]                                                                     
-        self.add_embeddings(embeddings, metadatas)                            
-        self.save()  # persist the updated index                              
-        
-        print(f"[INFO] Incrementally added {len(chunks)} chunks.")       
